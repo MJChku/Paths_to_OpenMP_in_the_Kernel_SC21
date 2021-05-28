@@ -1,0 +1,355 @@
+From 655a2286ca4900f6d11655d9917cc374f0ae8ed6 Mon Sep 17 00:00:00 2001
+From: MJChku <mjc97cooper@gmail.com>
+Date: Wed, 11 Nov 2020 06:06:14 -0600
+Subject: [PATCH] add waitqueue to simple sem
+
+---
+ src/compat/pthread/implement.h            |  5 +-
+ src/compat/pthread/pthread_cond_destroy.c |  2 +-
+ src/compat/pthread/pthread_cond_init.c    |  7 +--
+ src/compat/pthread/pthread_cond_signal.c  | 16 ++---
+ src/compat/pthread/pthread_cond_wait.c    | 48 +++------------
+ src/compat/pthread/simple_sem/Makefile    |  2 +
+ src/compat/pthread/simple_sem/ssem.c      | 74 ++++++++++++++++++++---
+ src/compat/pthread/simple_sem/ssem.h      | 13 ++--
+ 8 files changed, 97 insertions(+), 70 deletions(-)
+ create mode 100644 src/compat/pthread/simple_sem/Makefile
+
+diff --git a/src/compat/pthread/implement.h b/src/compat/pthread/implement.h
+index 2a185ad..6c2a42d 100644
+--- a/src/compat/pthread/implement.h
++++ b/src/compat/pthread/implement.h
+@@ -52,7 +52,7 @@
+ #define _IMPLEMENT_H
+ 
+ #include "nk/pte_osal.h"
+-
++#include "simple_sem/ssem.h"
+ /* use local include files during development */
+ #include "semaphore.h"
+ #include "sched.h"
+@@ -253,7 +253,8 @@ struct ThreadParms
+ struct nk_pthread_cond_t_
+ {
+     NK_LOCK_T lock;
+-    nk_wait_queue_t * wait_queue;
++    //nk_wait_queue_t * wait_queue;
++    simple_sem_t* sem;
+     unsigned nwaiters;
+     unsigned long long wakeup_seq;
+     unsigned long long woken_seq;
+diff --git a/src/compat/pthread/pthread_cond_destroy.c b/src/compat/pthread/pthread_cond_destroy.c
+index 14aec0e..f216a92 100644
+--- a/src/compat/pthread/pthread_cond_destroy.c
++++ b/src/compat/pthread/pthread_cond_destroy.c
+@@ -20,7 +20,7 @@ pthread_cond_destroy (pthread_cond_t * c)
+         return EINVAL;
+     }
+ 
+-    nk_wait_queue_destroy(c->wait_queue);
++    ssem_post(c->sem, c->nwaiters);
+     NK_UNLOCK(&c->lock);
+     memset(c, 0, sizeof(pthread_cond_t));
+     return 0;
+diff --git a/src/compat/pthread/pthread_cond_init.c b/src/compat/pthread/pthread_cond_init.c
+index ab48fdd..8f3ae55 100644
+--- a/src/compat/pthread/pthread_cond_init.c
++++ b/src/compat/pthread/pthread_cond_init.c
+@@ -33,11 +33,8 @@ pthread_cond_init (pthread_cond_t * c, const pthread_condattr_t * attr)
+     memset(c, 0, sizeof(pthread_cond_t));
+ 
+     snprintf(buf,NK_WAIT_QUEUE_NAME_LEN,"condvar%lu-wait",__sync_fetch_and_add(&count,1));
+-    c->wait_queue = nk_wait_queue_create(buf);
+-    if (!c->wait_queue) {
+-        ERROR("Could not create wait queue for cond var\n");
+-        return EINVAL;
+-    }
++    ssem_init(c->sem, 0);
++    // c->wait_queue = nk_wait_queue_create(buf);
+ 
+     NK_LOCK_INIT(&c->lock);
+     
+diff --git a/src/compat/pthread/pthread_cond_signal.c b/src/compat/pthread/pthread_cond_signal.c
+index 036f248..da28aee 100644
+--- a/src/compat/pthread/pthread_cond_signal.c
++++ b/src/compat/pthread/pthread_cond_signal.c
+@@ -2,24 +2,21 @@
+  * pthread_cond_signal.c
+  *
+  */
+-
+ #include "pthread.h"
+ #include "implement.h"
+ #include "pthread_cond_common.h"
+ 	
+-
+ 	
+ int
+ pthread_cond_signal (pthread_cond_t * c)
+ {
+-	
++    	
+     if (c == NULL)
+     {
+       return EINVAL;
+     }
+ 
+     NK_PROFILE_ENTRY();
+-
+     NK_LOCK(&c->lock);
+ 
+     // do we have anyone to signal?
+@@ -27,11 +24,10 @@ pthread_cond_signal (pthread_cond_t * c)
+ 
+         ++c->wakeup_seq;
+ 
+-        DEBUG_PRINT("Condvar signaling on (%p)\n", (void*)c);
+-
+-        nk_wait_queue_wake_one(c->wait_queue);
++        DEBUG("Condvar signaling on (%p)\n", (void*)c);
++	ssem_post(c->sem,1);
+ 
+-    }
++    } 
+ 
+     NK_UNLOCK(&c->lock);
+     NK_PROFILE_EXIT();
+@@ -61,8 +57,8 @@ pthread_cond_broadcast (pthread_cond_t * c)
+         NK_UNLOCK(&c->lock);
+ 
+         DEBUG_PRINT("Condvar broadcasting on (%p) (core=%u)\n", (void*)c, my_cpu_id());
+-        nk_wait_queue_wake_all(c->wait_queue);
+-        return 0;
++        ssem_post(c->sem, c->nwaiters);
++	return 0;
+ 
+     }
+ 
+diff --git a/src/compat/pthread/pthread_cond_wait.c b/src/compat/pthread/pthread_cond_wait.c
+index 909e103..aea7699 100644
+--- a/src/compat/pthread/pthread_cond_wait.c
++++ b/src/compat/pthread/pthread_cond_wait.c
+@@ -58,47 +58,13 @@ pthread_cond_timedwait (pthread_cond_t * c,
+ 	goto bcout;
+ 	
+        }
+-        nk_timer_t *t = nk_timer_get_thread_default();
+-
+-        if (!t) {
+-            ERROR("Failed to acquire timer for thread...\n");
+-            return errno;
+-        }
+-
+-        struct op o = {  .timer = t };
+-
+-        // the queues we will simultaneously be on
+-        nk_wait_queue_t *queues[2] = { c->wait_queue, t->waitq} ;
+-        // their condition checks no_check means sleep until explicit wakeup
+-        int (*condchecks[2])() = { no_check, check_timer };
+-        // and state
+-        void *states[2] = { &o, &o };
+-
+-        //DEBUG("down sleep / timeout %s\n",s->name);
+-
+-        if (nk_timer_set(t, timeout_ns - (now-start), NK_TIMER_WAIT_ONE, 0, 0, 0)) {
+-            ERROR("Cannot set timer\n");
+-            return errno;
+-        }
+-
+-        if (nk_timer_start(t)) {
+-            ERROR("Cannot start timer\n");
+-            return errno;
+-        }
+-
+         
+         NK_UNLOCK(&c->lock); 
+-
+-	DEBUG("starting multiple sleep\n");
+-
+-        nk_wait_queue_sleep_extended_multiple(2,queues,condchecks,states);
+-
+-        DEBUG("returned from multiple sleep and checking\n");
+-
+-	nk_timer_cancel(t);
++       
++	ssem_timedwait(c->sem, timeout_ns-(now-start));
+  
+-        //nk_wait_queue_sleep(c->wait_queue);
+         NK_LOCK(&c->lock);
++	
+ 
+         if (bc != *(volatile unsigned*)&(c->bcast_seq)) {
+             goto bcout;
+@@ -123,8 +89,8 @@ bcout:
+     NK_PROFILE_EXIT();
+ 
+     return result;
+-
+ }
++
+ int
+ pthread_cond_wait (pthread_cond_t * c, pthread_mutex_t * l)
+ {
+@@ -151,8 +117,10 @@ pthread_cond_wait (pthread_cond_t * c, pthread_mutex_t * l)
+     do {
+ 
+         NK_UNLOCK(&c->lock);
+-        nk_wait_queue_sleep(c->wait_queue);
+-        NK_LOCK(&c->lock);
++	
++	ssem_wait(c->sem);
++        
++	NK_LOCK(&c->lock);
+ 
+         if (bc != *(volatile unsigned*)&(c->bcast_seq)) {
+             goto bcout;
+diff --git a/src/compat/pthread/simple_sem/Makefile b/src/compat/pthread/simple_sem/Makefile
+new file mode 100644
+index 0000000..0a25f28
+--- /dev/null
++++ b/src/compat/pthread/simple_sem/Makefile
+@@ -0,0 +1,2 @@
++
++obj-y+= ssem.o
+diff --git a/src/compat/pthread/simple_sem/ssem.c b/src/compat/pthread/simple_sem/ssem.c
+index e0a9c68..b575b58 100644
+--- a/src/compat/pthread/simple_sem/ssem.c
++++ b/src/compat/pthread/simple_sem/ssem.c
+@@ -1,34 +1,92 @@
+ #include "ssem.h"
+ 
+-struct simple_sem{
+-  NK_LOCK_T* lock;
+-  int count;
+-};
++#include <nautilus/list.h>
++#include <nautilus/scheduler.h>
+ 
++#define SLEEP_COUNT  1
+ void ssem_init(simple_sem_t *s, int initial_count){
+-  NK_LOCK_INT(s->lock);
++  NK_LOCK_INIT(s->lock);
+   s->count = initial_count;
++  s->wait_queue = nk_wait_queue_create(NULL);
+ }
+ 
+ void ssem_post(simple_sem_t *s, int count){
+     
+     NK_LOCK(s->lock);
+     s->count+=count;
++/*    if(s->sleepcount > 0){
++      int a = count;
++      if (a > s->sleepcount){
++        a = s->sleepcount;
++      }
++      s->sleepcount -= a;
++      while(a--){
++        nk_wait_queue_wake_one(s->wait_queue);
++      }
++    }
++*/
++    NK_UNLOCK(s->lock);
++}
++
++int ssem_timedwait( simple_sem_t *s, uint64_t timeout_ns){
++
++   //int ori =  __sync_fetch_and_sub(&(s->count), 1);
++   uint64_t start = nk_sched_get_realtime(), now;
++
++   do{
++      NK_LOCK(s->lock);
++      if(s->count > 0){
++        s->count--;
++        break;
++      }
++      
++      NK_UNLOCK(s->lock);
++      //nk_yield();
++      __asm__("pause");
++      
++      now = nk_sched_get_realtime();
++      
++      if( now-start > timeout_ns){
++         NK_UNLOCK(s->lock);
++	 return 1;
++      }
++
++   }while(1);
++
+     NK_UNLOCK(s->lock);
++    return 0;
+ }
+ 
++inline void force_sleep(nk_wait_queue_t *t){
++
++   nk_wait_queue_sleep_extended(t, 0, 0);
++} 
++
+ void ssem_wait( simple_sem_t *s){
+     
+    //int ori =  __sync_fetch_and_sub(&(s->count), 1);
+-   
++   int wait_count = 0;   
+    while(1){
+       NK_LOCK(s->lock);
+       if(s->count > 0){
+ 	s->count--;
+         break;
+       }
+-      NK_UNLOCK(s->lock);
+-   }
+ 
+     NK_UNLOCK(s->lock);
++      //wait_count++;
++      //nk_yield();
++ /*     
++      if(wait_count > SLEEP_COUNT) {
++	   //s->sleepcount++;
++           NK_UNLOCK(s->lock);
++	   wait_count = 0;
++	   __asm__("pause");
++	   //force_sleep(s->wait_queue); 
++      }else{
++          NK_UNLOCK(s->lock);
++          __asm__("pause");
++      }*/
++   }
++    NK_UNLOCK(s->lock);
+ }
+diff --git a/src/compat/pthread/simple_sem/ssem.h b/src/compat/pthread/simple_sem/ssem.h
+index 0b83a18..489d78e 100644
+--- a/src/compat/pthread/simple_sem/ssem.h
++++ b/src/compat/pthread/simple_sem/ssem.h
+@@ -1,15 +1,17 @@
+ #ifndef _PTHREAD_SIMPLE_SEM_H_
+ #define _PTHREAD_SIMPLE_SEM_H_
+-
+ #include<nautilus/spinlock.h>
+-
++#include<nautilus/waitqueue.h>
+ struct simple_sem{
+-  spin_lock_t* lock;
++  NK_LOCK_T* lock;
+   int count;
++  int sleepcount;
++  nk_wait_queue_t *wait_queue;
++
+ };
+ 
+ 
+-typedef simple_sem simple_sem_t;
++typedef struct simple_sem simple_sem_t;
+ 
+ void ssem_init(simple_sem_t *s, int initial_count);
+ 
+@@ -17,4 +19,7 @@ void ssem_post(simple_sem_t *s, int count);
+ 
+ void ssem_wait( simple_sem_t *s);
+ 
++int ssem_timedwait( simple_sem_t *s, uint64_t timeout_ns);
++
++
+ #endif
+-- 
+2.25.1
+
