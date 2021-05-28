@@ -1,0 +1,460 @@
+From e295ffb109e34e24bbf97c179457ad560c26a31b Mon Sep 17 00:00:00 2001
+From: MJChku <mjc97cooper@gmail.com>
+Date: Tue, 27 Oct 2020 07:23:54 -0500
+Subject: [PATCH] several improvement on pthread but cause performance
+ degredation
+
+---
+ src/arch/x64/asm/boot.S                  | 22 +-------
+ src/compat/pthread/Makefile              |  5 +-
+ src/compat/pthread/create.c              |  8 +++
+ src/compat/pthread/implement.h           |  2 +
+ src/compat/pthread/nk/nk_compatibility.h | 72 ++++++++++++++++++++++++
+ src/compat/pthread/nk/nk_osal.c          | 28 ++++++---
+ src/compat/pthread/nk/pte_types.h        |  1 +
+ src/compat/pthread/nk_get_pte_thread_t.c | 10 ++++
+ src/compat/pthread/pte_detach.c          |  8 ++-
+ src/compat/pthread/pte_threadStart.c     |  1 +
+ src/compat/pthread/pte_throw.c           |  5 +-
+ src/compat/pthread/pthread_exit.c        |  4 +-
+ src/compat/pthread/pthread_self.c        | 22 +++++++-
+ src/compat/pthread/pthread_setspecific.c |  5 +-
+ 14 files changed, 156 insertions(+), 37 deletions(-)
+ create mode 100644 src/compat/pthread/nk/nk_compatibility.h
+ create mode 100644 src/compat/pthread/nk_get_pte_thread_t.c
+
+diff --git a/src/arch/x64/asm/boot.S b/src/arch/x64/asm/boot.S
+index 260680f..8cb99f2 100644
+--- a/src/arch/x64/asm/boot.S
++++ b/src/arch/x64/asm/boot.S
+@@ -39,7 +39,6 @@ multiboot_hdr:
+     /* BEGIN TAGS */
+ 
+     /* sections */
+- 
+     .word 2, 0
+     .long 24
+     .long multiboot_hdr
+@@ -123,31 +122,16 @@ paging_longmode_setup:
+     orl $0x3, %eax
+     movl $pdpt, %ebx
+     movl %eax, (%ebx)
+-   
+-    //set first 4 entry of PDPT 4GB total
+-    movl $4, %ecx
+-    movl $pd, %edx
+-    movl $0x83, %eax // set PS bit also (PDE -> 2MB page)
+-
+-.write_pdpe:
+-    push %ecx
+ 
+     // Identity map the first GB
+     movl $512, %ecx
++    movl $pd, %edx
++    movl $0x83, %eax // set PS bit also (PDE -> 2MB page)
+ .write_pde:
+     movl %eax, (%edx)
+     addl $0x200000, %eax
+     addl $0x8, %edx
+-    loop .write_pde 
+-    
+-    push %edx
+-    orl $0x3, %edx
+-    addl $0x8, %ebx  //next entry of pdpt
+-    movl %edx, (%ebx) 
+-    pop %edx
+-    pop %ecx
+-    loop .write_pdpe
+-
++    loop .write_pde
+ 
+     /* put pml4 address in cr3 */
+     movl $pml4, %eax
+diff --git a/src/compat/pthread/Makefile b/src/compat/pthread/Makefile
+index 20ea250..11729f9 100644
+--- a/src/compat/pthread/Makefile
++++ b/src/compat/pthread/Makefile
+@@ -1,6 +1,9 @@
+ NK_LIB =\
+ 	nk/
+ 
++NK_OBJS = \
++	  nk_get_pte_thread_t.o
++
+ MUTEX_OBJS = \
+   pthread_mutex_unlock.o \
+   pthread_mutex_init.o \
+@@ -152,7 +155,7 @@ CANCEL_OBJS = \
+ 
+ 
+ 
+-OBJS = $(MUTEX_OBJS) $(MUTEXATTR_OBJS) $(THREAD_OBJS) $(SUPPORT_OBJS) $(TLS_OBJS) $(MISC_OBJS) $(SEM_OBJS) $(BARRIER_OBJS) $(SPIN_OBJS) $(CONDVAR_OBJS) $(RWLOCK_OBJS) $(CANCEL_OBJS)
++OBJS = $(MUTEX_OBJS) $(MUTEXATTR_OBJS) $(THREAD_OBJS) $(SUPPORT_OBJS) $(TLS_OBJS) $(MISC_OBJS) $(SEM_OBJS) $(BARRIER_OBJS) $(SPIN_OBJS) $(CONDVAR_OBJS) $(RWLOCK_OBJS) $(CANCEL_OBJS) $(NK_OBJS)
+ obj-y +=$(OBJS) \
+ 	$(NK_LIB) \
+ 
+diff --git a/src/compat/pthread/create.c b/src/compat/pthread/create.c
+index 5a49458..4aded73 100644
+--- a/src/compat/pthread/create.c
++++ b/src/compat/pthread/create.c
+@@ -214,6 +214,14 @@ pthread_create (pthread_t * tid,
+                                 parms,
+                                 &(tp->threadId));
+ 
++  //mjc why this? ease pthread_self we don't need getspecific(pteself) anymore
++  nk_thread_t *threadptr = (nk_thread_t*) tp->threadId;
++  //plus 8 means add 8 bytes
++  pte_thread_t ** ptr = (pte_thread_t **) (threadptr->hwtls+8);
++  *ptr = tp; 
++  //mjc set this, seems to be a bug from pte repo
++  tp->ptHandle = thread;
++
+   if (osResult == PTE_OS_OK)
+     {
+       pte_osThreadStart(tp->threadId);
+diff --git a/src/compat/pthread/implement.h b/src/compat/pthread/implement.h
+index b54e302..29a6476 100644
+--- a/src/compat/pthread/implement.h
++++ b/src/compat/pthread/implement.h
+@@ -479,6 +479,8 @@ extern "C"
+     
+     //mjc add out
+     int pte_threadStart (void *vthreadParms, void ** out);
++    //mjc add
++    pte_thread_t * nk_get_pte_thread_t(void);
+ 
+     void pte_callUserDestroyRoutines (pthread_t thread);
+ 
+diff --git a/src/compat/pthread/nk/nk_compatibility.h b/src/compat/pthread/nk/nk_compatibility.h
+new file mode 100644
+index 0000000..cdd4401
+--- /dev/null
++++ b/src/compat/pthread/nk/nk_compatibility.h
+@@ -0,0 +1,72 @@
++/* pte_types.h  */
++#ifndef NK_COMPAT_PTE_H
++#define NK_COMPAT_PTE_H
++
++#include <nautilus/scheduler.h>
++
++
++//this is duplicate but to be independent copy the struct here
++
++typedef enum { ARRIVED=0,          // no admission control done
++               ADMITTED,           // admitted
++               CHANGING,           // admitted for new constraints, now changing to them
++               YIELDING,           // explit yield of slice
++               SLEEPING,           // being removed from RT and non-RT run/arrival queues
++                                   // probably due to having been put into a wait queue
++               EXITING,            // being removed from RT and non-RT run/arrival queues
++                                   // will not return
++               DENIED,             // not admitted
++               REAPABLE,           // it's OK for the reaper to destroy the thread
++             } rt_status;
++
++typedef enum { RUNNABLE_QUEUE = 0,
++               PENDING_QUEUE = 1,
++               APERIODIC_QUEUE = 2} queue_type;
++
++typedef struct nk_sched_thread_state {
++    // how this thread is to be scheduled
++    struct nk_sched_constraints constraints;
++    // 
++    rt_status status;
++    // which queue the thread is currently on
++    queue_type q_type;
++    
++    int      is_intr;      // this is an interrupt thread
++    int      is_task;      // this is a task thread
++
++    uint64_t start_time;   // when last started
++    uint64_t cur_run_time; // how long it has run without being preempted
++    uint64_t run_time;     // how long it has run so far
++                           // full duration for aperiodic and sporadic
++                           // current slice for periodic
++    uint64_t deadline;     // current deadline / time of next arrival if pending
++                           // for an aperiodic task, this is its current dynamic
++                           // priority 
++    uint64_t exit_time;    // time of actual completion / arrival
++
++    // Statistics are reset when the constraints are changed
++    uint64_t arrival_count;   // how many times it has arrived (1 for aperiodic/sporadic)
++    uint64_t resched_count;   // how many times resched was invoked on this thread
++    uint64_t resched_long_count; // how many times the long path was taken for the thread
++    uint64_t switch_in_count; // number of times switched to
++    uint64_t miss_count;      // number of deadline misses
++    uint64_t miss_time_sum;   // sum of missed time
++    uint64_t miss_time_sum2;  // sum of squares of missed time
++
++    // the thread context itself
++    struct nk_thread *thread;
++
++    // the thread node in a thread list (the global thread list)
++    struct rt_node   *list; 
++
++} rt_thread ;
++
++typedef struct nk_sched_thread_state rt_thread;
++typedef struct rt_node {
++    rt_thread      *thread;
++    struct rt_node *next;
++    struct rt_node *prev;
++} rt_node;
++
++
++#endif
+diff --git a/src/compat/pthread/nk/nk_osal.c b/src/compat/pthread/nk/nk_osal.c
+index b80bb86..7574f22 100644
+--- a/src/compat/pthread/nk/nk_osal.c
++++ b/src/compat/pthread/nk/nk_osal.c
+@@ -2,6 +2,7 @@
+ #include "../debug.h"
+ #include "pte_types.h"
+ #include "pte_osal.h"
++#include "nk_compatibility.h"
+ #include <nautilus/libccompat.h>
+ #include <nautilus/scheduler.h>
+ #include <nautilus/semaphore.h>
+@@ -149,7 +150,7 @@ pte_osResult pte_osThreadCreate(pte_osThreadEntryPoint entryPoint,
+   //pte_osThreadHandle handleobj = malloc(sizeof(nk_thread_t));
+   //pte_osThreadHandle handleobj = malloc(sizeof(struct thread_with_signal));
+   //memset(handleobj,0,sizeof(nk_thread_t));
+-
++  //
+   //handleobj->priority = initialPriority;
+  
+   struct sys_info *sys = per_cpu_get(system);
+@@ -159,10 +160,12 @@ pte_osResult pte_osThreadCreate(pte_osThreadEntryPoint entryPoint,
+     ERROR("create error exit\n");
+     return PTE_OS_NO_RESOURCES;
+   }
+-  
++   
+   //*handle = handleobj;
+   struct nk_thread* thread = (struct nk_thread*) (*handle);
+ 
++  //thread->sched_state->constraints.interrupt_priority_class = (uint8_t) initialPriority; 
++
+   DEBUG("osThreadCreate %p, %lu ref %lu\n",  thread, thread->tid, thread->refcount);
+  
+   return PTE_OS_OK;
+@@ -212,13 +215,20 @@ pte_osThreadHandle pte_osThreadGetHandle(void){
+   //return (pte_osThreadHandle) pcontainer_of(thethread,struct thread_with_signal, tid);
+ }
+ 
+-int pte_osThreadGetPriority(pte_osThreadHandle threadHandle){
+-  return 0;
++int pte_osThreadGetPriority(pte_osThreadHandle handle){
++
++    return 0;	
++    return  (int) ((nk_thread_t *) handle)->sched_state->constraints.interrupt_priority_class;
++    //return 0;
+     //threadHandle->priority;
+ }
+ 
+-pte_osResult pte_osThreadSetPriority(pte_osThreadHandle threadHandle, int newPriority){
+-  //threadHandle->priority = newPriority;
++pte_osResult pte_osThreadSetPriority(pte_osThreadHandle handle, int newPriority){
++
++ // struct nk_sched_constraints priority; 
++ // priority.interrupt_priority_class = newPriority;
++ // nk_sched_thread_change_constraints(&priority);
++	
+   return PTE_OS_OK;
+ 
+ }
+@@ -291,7 +301,7 @@ void pte_osThreadSleep(unsigned int msecs){
+  * Returns the maximum allowable priority
+  *============================================*/
+ int pte_osThreadGetMaxPriority(){
+-  return 3;
++  return 0xe;
+ 
+ }
+ 
+@@ -299,7 +309,7 @@ int pte_osThreadGetMaxPriority(){
+  * Returns the minimum allowable priority
+  *=========================================*/
+ int pte_osThreadGetMinPriority(){
+-  return 0;
++  return 0x0;
+ }
+ 
+ /*==================================================================================*
+@@ -307,7 +317,7 @@ int pte_osThreadGetMinPriority(){
+  * explicitly set one.
+  *===================================================================================*/
+ int pte_osThreadGetDefaultPriority(){
+-  return 0;
++  return 0x0;
+ }
+ 
+ /*=================================================================================*
+diff --git a/src/compat/pthread/nk/pte_types.h b/src/compat/pthread/nk/pte_types.h
+index 0e41578..caec682 100644
+--- a/src/compat/pthread/nk/pte_types.h
++++ b/src/compat/pthread/nk/pte_types.h
+@@ -51,4 +51,5 @@ struct timeb
+   short dstflag;
+ };
+ 
++
+ #endif /* PTE_TYPES_H */
+diff --git a/src/compat/pthread/nk_get_pte_thread_t.c b/src/compat/pthread/nk_get_pte_thread_t.c
+new file mode 100644
+index 0000000..5532c03
+--- /dev/null
++++ b/src/compat/pthread/nk_get_pte_thread_t.c
+@@ -0,0 +1,10 @@
++#include <nautilus/nautilus.h>
++#include "pthread.h"
++#include "implement.h"
++
++pte_thread_t * nk_get_pte_thread_t(){
++
++  nk_thread_t *cur = get_cur_thread();
++  return *((pte_thread_t **) cur->hwtls+8);
++
++}
+diff --git a/src/compat/pthread/pte_detach.c b/src/compat/pthread/pte_detach.c
+index f6195d7..da3a1b5 100644
+--- a/src/compat/pthread/pte_detach.c
++++ b/src/compat/pthread/pte_detach.c
+@@ -52,7 +52,9 @@ pte_thread_detach_common (unsigned char threadShouldExit)
+        * Don't use pthread_self() - to avoid creating an implicit POSIX thread handle
+        * unnecessarily.
+        */
+-      pte_thread_t * sp = (pte_thread_t *) pthread_getspecific (pte_selfThreadKey);
++      //mjc
++      pte_thread_t * sp = nk_get_pte_thread_t();
++      //pte_thread_t * sp = (pte_thread_t *) pthread_getspecific (pte_selfThreadKey);
+ 
+       if (sp != NULL) // otherwise OS thread with no implicit POSIX handle.
+         {
+@@ -78,8 +80,8 @@ pte_thread_detach_common (unsigned char threadShouldExit)
+                 {
+                   pte_threadDestroy (sp->ptHandle);
+                 }
+-
+-              // pte_osTlsSetValue (pte_selfThreadKey->key, NULL);
++                // mjc muted but no unmute
++                 pte_osTlsSetValue (pte_selfThreadKey->key, NULL);
+             }
+           else
+             {
+diff --git a/src/compat/pthread/pte_threadStart.c b/src/compat/pthread/pte_threadStart.c
+index e7ef8f4..d9e9cf9 100644
+--- a/src/compat/pthread/pte_threadStart.c
++++ b/src/compat/pthread/pte_threadStart.c
+@@ -97,6 +97,7 @@ int pte_threadStart (void *vthreadParms, void ** out)
+   arg = threadParms->arg;
+ //  free (threadParms);
+ 
++  //mjc we don't need this
+   pthread_setspecific (pte_selfThreadKey, sp);
+ 
+   sp->state = PThreadStateRunning;
+diff --git a/src/compat/pthread/pte_throw.c b/src/compat/pthread/pte_throw.c
+index 7f1ee7e..5dfaa13 100644
+--- a/src/compat/pthread/pte_throw.c
++++ b/src/compat/pthread/pte_throw.c
+@@ -61,7 +61,10 @@ pte_throw (unsigned int exception)
+    * Don't use pthread_self() to avoid creating an implicit POSIX thread handle
+    * unnecessarily.
+    */
+-  pte_thread_t * sp = (pte_thread_t *) pthread_getspecific (pte_selfThreadKey);
++
++  //mjc
++  //pte_thread_t * sp = (pte_thread_t *) pthread_getspecific (pte_selfThreadKey);
++  pte_thread_t * sp = nk_get_pte_thread_t();
+ 
+ 
+   if (exception != PTE_EPS_CANCEL && exception != PTE_EPS_EXIT)
+diff --git a/src/compat/pthread/pthread_exit.c b/src/compat/pthread/pthread_exit.c
+index ef48e9b..ea0e280 100644
+--- a/src/compat/pthread/pthread_exit.c
++++ b/src/compat/pthread/pthread_exit.c
+@@ -74,7 +74,9 @@ pthread_exit (void *value_ptr)
+    * Don't use pthread_self() to avoid creating an implicit POSIX thread handle
+    * unnecessarily.
+    */
+-  sp = (pte_thread_t *) pthread_getspecific (pte_selfThreadKey);
++  //mjc
++  //  sp = (pte_thread_t *) pthread_getspecific (pte_selfThreadKey);
++  sp = nk_get_pte_thread_t();
+ 
+   if (NULL == sp)
+     {
+diff --git a/src/compat/pthread/pthread_self.c b/src/compat/pthread/pthread_self.c
+index e5f075d..d0aca89 100644
+--- a/src/compat/pthread/pthread_self.c
++++ b/src/compat/pthread/pthread_self.c
+@@ -46,6 +46,13 @@
+ #include "pthread.h"
+ #include "implement.h"
+ 
++#define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
++#define container_of(ptr, type, member) ({                      \
++        const typeof( ((type *)0)->member ) *__mptr = (ptr);    \
++        (type *)( (char *)__mptr - offsetof(type,member) );})
++
++
++
+ pthread_t
+ pthread_self (void)
+ /*
+@@ -71,7 +78,10 @@ pthread_self (void)
+   pthread_t self;
+   pte_thread_t * sp;
+ 
+-  sp = (pte_thread_t *) pthread_getspecific (pte_selfThreadKey);
++  //mjc
++  sp = nk_get_pte_thread_t();
++
++  //sp = (pte_thread_t *) pthread_getspecific (pte_selfThreadKey);
+ 
+   if (sp != NULL)
+     {
+@@ -107,7 +117,15 @@ pthread_self (void)
+            * because the new handle is not yet public.
+            */
+           sp->sched_priority = 0;
+-
++          
++	  nk_thread_t *threadptr = (nk_thread_t*) sp->threadId;
++          //plus 8 means add 8 bytes
++          pte_thread_t ** ptr = (pte_thread_t **) (threadptr->hwtls+8);
++          *ptr = sp;
++          //mjc set this, seems to be a bug from pte repo
++          sp->ptHandle = self;
++  
++	  //mjc we don't need this
+           pthread_setspecific (pte_selfThreadKey, (void *) sp);
+         }
+     }
+diff --git a/src/compat/pthread/pthread_setspecific.c b/src/compat/pthread/pthread_setspecific.c
+index 62928a3..b8312f5 100644
+--- a/src/compat/pthread/pthread_setspecific.c
++++ b/src/compat/pthread/pthread_setspecific.c
+@@ -83,6 +83,7 @@ pthread_setspecific (pthread_key_t key, const void *value)
+        * an instance of pthread_t for the current
+        * thread if one wasn't explicitly created
+        */
++      //mjc confirm this
+       self = pthread_self ();
+       if (self.p == NULL)
+         {
+@@ -95,7 +96,9 @@ pthread_setspecific (pthread_key_t key, const void *value)
+        * Resolve catch-22 of registering thread with selfThread
+        * key
+        */
+-      pte_thread_t * sp = (pte_thread_t *) pthread_getspecific (pte_selfThreadKey);
++      //mjc
++      //pte_thread_t * sp = (pte_thread_t *) pthread_getspecific (pte_selfThreadKey);
++      pte_thread_t * sp = nk_get_pte_thread_t();
+ 
+       if (sp == NULL)
+         {
+-- 
+2.25.1
+
