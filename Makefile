@@ -611,7 +611,10 @@ ifeq ($(CROSS_COMPILE)a, a)
 #
 # Virgil option specifically on peroni, which hides this a bit
 #
-    libs-y += /usr/lib/gcc/x86_64-redhat-linux/8/libstdc++.a  
+#    libs-y += /usr/lib/gcc/x86_64-redhat-linux/8/libstdc++.a
+#
+# for CCK distribution, we will not include libstdc++
+  libs-y +=   # intentionally empty
 else
   libs-y += $(CROSS_COMPILE)/../lib64/libstdc++.a
 endif
