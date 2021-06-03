@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 #Nautilus: 
-# Thu Jun  3 10:19:50 2021
+# Thu Jun  3 10:33:14 2021
 #
 
 #
@@ -165,7 +165,7 @@ NAUT_CONFIG_DEBUG_PRINTS=y
 # NAUT_CONFIG_NESL_RT is not set
 # NAUT_CONFIG_OPENMP_RT is not set
 NAUT_CONFIG_VIRGIL_RT=y
-NAUT_CONFIG_VIRGIL_RT_LIBRARY="CCK_TOP_LEVEL/parallelized.o"
+NAUT_CONFIG_VIRGIL_RT_LIBRARY="parallelized.o"
 # NAUT_CONFIG_VIRGIL_RT_DEBUG is not set
 NAUT_CONFIG_RACKET_RT=y
 
