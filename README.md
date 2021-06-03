@@ -20,7 +20,7 @@ Different branches include different things we built described as below, and in 
 | PIK | Process in kernel source |
 | CCK | Custom Compilation in kernel, source code on Nautilus side |
 
-## Even without going to each branch, we provide top-level make command that will compile different things.
+## Alternatively, even without going to each branch, we provide top-level make command that will compile different things.
 
 ## Fetch EPCC, NAS-NPB benchmark, and fetch RTK source code
 Run from the top directory
