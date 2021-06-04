@@ -163,5 +163,13 @@ To run a specific NAS Parallel Benchmark (e.g. FT) with CLASS B after build:
 make run_linux_nas BENCHMARK=FT CLASS=B
 ```
 
+---
 
+If you want to compile a different test suite with different CLASSes from the test suite we are using for the paper, do the following:
+
+```shell
+vi linux_npb-nas/config/suite.def	
+```
+
+and uncomment the benchmarks you want to include in the test suite for Linux.
 
