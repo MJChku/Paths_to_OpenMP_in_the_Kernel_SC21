@@ -123,7 +123,7 @@ ifeq ($(BENCHMARK),SUITE)
 
 else
 
-	cd linux_npb-nas/bin; ./$(bench).$(CLASS)	
+	cd linux_npb-nas/bin; ./$(BENCHMARK).$(CLASS)	
 
 endif
 
