@@ -35,7 +35,7 @@ obj-y += set_omp_num_threads.o
 
 #--- B class FT can compile only by itself ---#
 
-obj-y += FT/
+obj-y += SUB-BENCHMARK/
 
 #--- C class IS should be configured with large stack size (> 16MB) ---#
 
