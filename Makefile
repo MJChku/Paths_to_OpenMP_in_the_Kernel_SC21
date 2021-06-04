@@ -1,6 +1,6 @@
-BENCHMARK = NAS-NPB
-SUB-BENCHMARK = FT  # list of supported binaries
-sub-bench = `echo $(SUB-BENCHMARK) | tr A-Z a-z`
+BENCH-NAME=NAS
+BENCHMARK=SUITE# list of supported binaries
+bench = `echo $(BENCHMARK) | tr A-Z a-z`
 CLASS=C
 
 init: prepare_gitrepo  Nautilus_rtk linux_epcc  linux_npb-nas
@@ -9,6 +9,7 @@ init: prepare_gitrepo  Nautilus_rtk linux_epcc  linux_npb-nas
 prepare_gitrepo:
 
 	git clone https://github.com/MJChku/Paths_to_OpenMP_in_the_Kernel_SC21/ all_in_one
+
 
 Nautilus_rtk:
 
@@ -19,19 +20,48 @@ Nautilus_rtk:
 	cd nautilus_rtk; cp configs/rtk.config .config
 
 
+linux_epcc:
+
+	cp -r all_in_one linux_epcc;
+
+	cd linux_epcc; git checkout EPCC;
+
+
+linux_npb-nas:
+
+	cp -r all_in_one linux_npb-nas;
+	cd linux_npb-nas; git checkout NPB3.0-omp-c;
+
+
 build_nautilus:
+
 	cd nautilus_rtk; cp configs/rtk.config .config
-ifeq ($(BENCHMARK),EPCC)
+
+ifeq ($(BENCH-NAME),EPCC)
+	
 	cd nautilus_rtk; cd ./src/test/openmp/; rm BENCHMARK; ln -sf openmpbench_C_v31/ BENCHMARK
+
 else
+
+ifeq ($(BENCHMARK),SUITE)
+	
+	@echo "Please specify a benchmark. e.g. BENCHMARK=BT"
+
+else
+	
 	cd nautilus_rtk; cd ./src/test/openmp/; rm BENCHMARK; ln -sf NPB-NAS/  BENCHMARK
-	cd nautilus_rtk; cd ./src/test/openmp/NPB-NAS/; rm SUB-BENCHMARK; ln -sf $(SUB-BENCHMARK) SUB-BENCHMARK
+	cd nautilus_rtk; cd ./src/test/openmp/NPB-NAS/; rm SUB-BENCHMARK; ln -sf $(BENCHMARK) SUB-BENCHMARK
+
 endif
+
+endif
+	
 	cd nautilus_rtk && make clean && make isoimage
+
 
 run_nautilus: 
 
-ifeq ($(BENCHMARK),EPCC)
+ifeq ($(BENCH-NAME),EPCC)
 	@echo "At the root-shell> prompt"
 	@echo "type ompb to launch EPCC\n"
 	@echo "For example: \n"
@@ -43,53 +73,92 @@ else
 	@echo "omp_num_threads N  to set the number of threads to use\n"
 	@echo "For example: \n"
 	@echo "root-shell> omp_num_threads 16 \n"
-	@echo "nas-$(sub-bench) test to run the test of $(BENCHMARK) $(SUB-BENCHMARK)\n"
+	@echo "nas-bt test to run the test of NAS BT\n"
 	@echo "For example: \n"
-	@echo "root-shell> nas-$(sub-bench) \n"
+	@echo "root-shell> nas-bt \n"
 	@sleep 10
 endif
 
 	@cd nautilus_rtk; ./run
 
 
-linux_epcc:
 
-	cp -r all_in_one linux_epcc;
+build_linux: build_linux_epcc build_linux_nas
 
-	cd linux_epcc; git checkout EPCC;
+
+build_linux_nas:
+
+ifeq ($(BENCHMARK),SUITE)
+	
+	#Build benchmark suite for Linux, including ft.B, bt.B, others are *.C
+	cd linux_npb-nas; make clean; make suite;
+
+else
+	
+	@echo "If error happens, comply to the following"
+	@echo "set BENCHMARK to be one of FT BT CG MG LU SP EP IS" 
+	@echo "set CLASS to be B or C"
+	@sleep 5
+
+	cd linux_npb-nas; make clean; make $(BENCHMARK) CLASS=$(CLASS);
+
+endif
+
 
 
 build_linux_epcc:
 	
 	cd linux_epcc; make clean; make
 
+run_linux: run_linux_nas run_linux_epcc
+
+
+run_linux_nas:
+
+ifeq ($(BENCHMARK),SUITE)	
+	
+	# Run all
+	cd linux_npb-nas/bin;
+	@echo "Run All nas-benchmarks"	
+
+else
+
+	cd linux_npb-nas/bin; ./$(bench).$(CLASS)	
+
+endif
+
+
 run_linux_epcc:
 
-	@echo "If error happens, comply to the following"
-	@echo "set SUB-BENCHMARK to be one of arraybench_59049 synchbench schedbench taskbench"
-	@sleep 5
-	cd linux_epcc; ./$(SUB-BENCHMARK)
 
+ifeq ($(BENCHMARK),SUITE)
 
-linux_npb-nas:
-
-	cp -r all_in_one linux_npb-nas;
-	cd linux_npb-nas; git checkout NPB3.0-omp-c;
-
-build_linux_npb-nas:
+	@echo "Run all EPCC benchmark"
+else
 
 	@echo "If error happens, comply to the following"
-	@echo "set SUB-BENCHMARK to be one of FT BT CG MG LU SP EP IS" 
-	@echo "set CLASS to be B or C"
+	@echo "set BENCHMARK to be one of arraybench_59049 synchbench schedbench taskbench"
 	@sleep 5
 
-	cd linux_npb-nas; make clean; make $(SUB-BENCHMARK) CLASS=$(CLASS);
+	cd linux_epcc; ./$(BENCHMARK)
+
+endif
 
 
-run_linux_npb-nas:
-
-	cd linux_npb-nas/bin; ./$(sub-bench).$(CLASS)
-
+#build_linux_npb-nas:
+#
+#	@echo "If error happens, comply to the following"
+#	@echo "set SUB-BENCHMARK to be one of FT BT CG MG LU SP EP IS" 
+#	@echo "set CLASS to be B or C"
+#	@sleep 5
+#
+#	cd linux_npb-nas; make clean; make $(BENCHMARK) CLASS=$(CLASS);
+#
+#
+#run_linux_npb-nas:
+#
+#	cd linux_npb-nas/bin; ./$(bench).$(CLASS)
+#
 
 
 clean:
