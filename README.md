@@ -107,6 +107,8 @@ To run them all:
 make run_linux
 ```
 
+**WARNING: This would take hours to finish.** 
+
 ---
 
 ### EPCC benchmarks
@@ -123,6 +125,8 @@ To run all the EPCC benchmarks:
 make run_linux_epcc	
 ```
 
+
+
 ---
 
 To run one of the EPCC benchmarks (syncbench, schedbench, taskbench, arraybench_59049), run the following:
@@ -131,6 +135,8 @@ To run one of the EPCC benchmarks (syncbench, schedbench, taskbench, arraybench_
 ```  shell
 make run_linux_epcc BENCHMARK=arraybench_59049
 ```
+
+
 
 ---
 
@@ -147,6 +153,8 @@ To run this test suite:
 ```shell
 make run_linux_nas
 ```
+
+**WARNING: This would take hours to finish.** 
 
 ---
 
