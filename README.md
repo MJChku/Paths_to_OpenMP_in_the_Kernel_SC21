@@ -22,75 +22,144 @@ Different branches include different things we built described as below, and in 
 
 ## Alternatively, even without going to each branch, we provide top-level make command that will compile different things.
 
-## Fetch EPCC, NAS-NPB benchmark, and fetch RTK source code
+## Fetch EPCC, NAS Parallel Benchmarks (NPB), and RTK source code
 Run from the top directory
-```
+```shell
 make init
 ```
 
-## Build Nautilus with EPCC benchmark
-```
-make BENCHMARK=EPCC build_nautilus
+---
+
+## Nautilus with EPCC Benchmarks
+
+### Build Nautilus with EPCC Benchmarks
+
+```shell
+make BENCH-NAME=EPCC build_nautilus
 ```
 
-## Run the benchmark from within Nautilus (on QEMU)
-```
-make run_nautilus BENCHMARK=EPCC
+### Run EPCC Benchmarks from within Nautilus (on QEMU)
+
+```shell
+make run_nautilus BENCH-NAME=EPCC
 ```
 
-To start things, use the following commands at the root-shell prompt:
+To start running benchmarks, use the following commands at the root-shell prompt:
 ```
 root-shell> ompb
 ```
 
 To test on a physical machine, write the nautilus_rtk/nautilus.iso to a CD or USB stick and boot the machine.   Alternatively, add nautilus_rtk/nautilus.bin to your grub configuration as described elsewhere, or PXE boot it.
 
+---
 
-## Build Nautilus with NAS-NPB benchmark
+## Nautilus with NAS Parallel Benchmarks (NPB)
 
-### NAS-NPB includes 8 sub-benchmarks including FT, BT, CG, EP, LU, SP, IS, MG, EP, use the following to build for FT as an example.
-```
-make BENCHMARK=NAS-NPB SUB-BENCHMARK=FT build_nautilus
+### Build Nautilus with NPB
+
+#### We included eight of NAS Parallel Benchmarks (BT, FT, CG, EP, LU, MG, IS, SP) in RTK. FT is used as an example below:
+
+To build Nautilus with one NAS Parallel Benchmark (e.g. FT), use the following command:
+
+```shell
+make build_nautilus BENCH-NAME=NAS BENCHMARK=FT 
 ```
 
-## Run the benchmark from within Nautilus (on QEMU)
-```
-make run_nautilus BENCHMARK=NAS-NPB SUB-BENCHMARK=FT
+### Run NPB from within Nautilus (on QEMU)
+
+```shell
+make run_nautilus BENCH-NAME=NAS 
 ```
 
-To start things, use the following commands at the root-shell prompt:
+To start running that benchmark (e.g. FT), use the following commands at the root-shell prompt:
 ```
 root-shell> nas-ft
 ```
-To change number of threads, for example to 16 threads, run following
+To change the number of threads, for example to 16 threads, before running the test, run following:
 ```
 root-shell> omp_num_threads 16
 ```
 
-## Compile the benchmarks to run Linux
+Or
 
-### NAS-NPB(NAS) benchmarks
-To compile NAS benchmarks for Linux, run from the top directory with sub-benchmark and class set properly; You can choose from 8 sub-benchmarks (BT, LU, SP, IS, MG, FT, SP. EP) and CLASS from 4 scales (S, A, B, C). 
-To build FT CLASS B for example, use the following
-``` 
-make build_linux_npb-nas  SUB-BENCHMARK=FT CLASS=B
+```
+root-shell> set-omp-num-threads 16
 ```
 
-To run NAS benchmarks just compiled, run following
-```  
-make run_linux_npb-nas  SUB-BENCHMARK=FT CLASS=B
+---
+
+
+
+## Compile and Run Benchmarks on Linux
+
+To compile the same test suite as RTK's:
+
+```shell
+make build_linux
 ```
 
+This will compile BT, FT in B Class; CG, EP, MG, LU, IS, SP in C Class for NPB; this will also compile all the EPCC Benchmarks.
+
+To run them all:
+
+```shell
+make run_linux
+```
+
+---
 
 ### EPCC benchmarks
-To compile EPCC benchmarks for Linux, run from the top directory the following. 
-``` 
+
+To compile EPCC benchmarks for Linux:
+
+``` sh
 make build_linux_epcc
 ```
 
-To run EPCC benchmarks just compiled, you should choose from 4 sub-benchmarks (syncbench, schedbench, taskbench, arraybench_59049)
-To run arraybench_59049 for example, use following
-```  
-make run_linux_epcc  SUB-BENCHMARK=arraybench_59049
+To run all the EPCC benchmarks:
+
+```shell
+make run_linux_epcc	
 ```
+
+---
+
+To run one of the EPCC benchmarks (syncbench, schedbench, taskbench, arraybench_59049), run the following:
+(e.g. arraybench_59049)
+
+```  shell
+make run_linux_epcc BENCHMARK=arraybench_59049
+```
+
+---
+
+### NAS Parallel Benchmarks (NPB)
+
+To compile the same test suite as RTK/CCK's:
+
+```shell
+make build_linux_nas
+```
+
+To run this test suite:
+
+```shell
+make run_linux_nas
+```
+
+---
+
+To compile a specific NAS Parallel Benchmark (e.g. FT):
+
+```sh
+make build_linux_nas BENCHMARK=FT CLASS=B
+```
+
+To run a specific NAS Parallel Benchmark (e.g. FT):
+
+```sh
+make run_linux_nas BENCHMARK=FT CLASS=B
+```
+
+
 
