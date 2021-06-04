@@ -117,9 +117,9 @@ run_linux_nas:
 
 ifeq ($(BENCHMARK),SUITE)	
 	
-	# Run all
-	cd linux_npb-nas/ ; bash runall.sh
+	# Run all	
 	@echo "Run All nas-benchmarks"	
+	cd linux_npb-nas/ ; bash runall.sh
 
 else
 
