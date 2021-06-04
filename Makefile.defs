@@ -13,7 +13,7 @@ CC=clang-10
 CFLAGS= -O2 -Wall -fopenmp -fno-omit-frame-pointer -ffreestanding -fno-stack-protector -fno-strict-aliasing -fno-strict-overflow -mno-red-zone -mcmodel=large  -Wall -Wno-unused-function -Wno-unused-variable -fno-common -Wstrict-overflow=5  -fgnu89-inline -g -m64  -Wno-pointer-sign -fopenmp -Iinclude/rt/openmp -fopenmp -DOMPVER2 -DOMPVER3
 LDFLAGS= -O0
 #CPP=cpp
-LIBS= /home/mjc/linux_libomp.a -lm -lpthread -ldl
+LIBS= libomp/linux_libomp.a -lm -lpthread -ldl
 
 #CC=clang-10
 #CFLAGS= -O1 -Wall
