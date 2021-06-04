@@ -73,9 +73,9 @@ else
 	@echo "omp_num_threads N  to set the number of threads to use\n"
 	@echo "For example: \n"
 	@echo "root-shell> omp_num_threads 16 \n"
-	@echo "nas-bt test to run the test of NAS BT\n"
+	@echo "nas-bt test to run the test of NAS $(BENCHMARK)\n"
 	@echo "For example: \n"
-	@echo "root-shell> nas-bt \n"
+	@echo "root-shell> nas-$(bench) \n"
 	@sleep 10
 endif
 
