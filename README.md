@@ -57,7 +57,7 @@ To test on a physical machine, write the nautilus_rtk/nautilus.iso to a CD or US
 
 ### Build Nautilus with NPB
 
-#### We included eight of NAS Parallel Benchmarks (BT, FT, CG, EP, LU, MG, IS, SP) in RTK. FT is used as an example below:
+#### We included eight of NAParallel BenchmarkS Parallel Benchmarks (BT, FT, CG, EP, LU, MG, IS, SP) in RTK. FT is used as an example below:
 
 To build Nautilus with one NAS Parallel Benchmark (e.g. FT), use the following command:
 
@@ -149,13 +149,15 @@ make run_linux_nas
 
 ---
 
-To compile a specific NAS Parallel Benchmark (e.g. FT):
+All available NAS Parallel Benchmarks include FT, CG, BT, LU, IS, EP, SP, MG available at 4 scales/classes (S, A, B, C)
+
+To compile a specific NAS Parallel Benchmark (e.g. FT) with CLASS B, run following:
 
 ```sh
 make build_linux_nas BENCHMARK=FT CLASS=B
 ```
 
-To run a specific NAS Parallel Benchmark (e.g. FT):
+To run a specific NAS Parallel Benchmark (e.g. FT) with CLASS B after build:
 
 ```sh
 make run_linux_nas BENCHMARK=FT CLASS=B
