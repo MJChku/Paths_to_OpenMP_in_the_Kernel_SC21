@@ -1,7 +1,7 @@
 SHELL=/bin/sh
 BENCHMARK=ft
 BENCHMARKU=FT
-
+BENCHMARKL=ft
 include ../config/make.def
 
 OBJS = ft.o ${COMMON}/c_${RAND}.o ${COMMON}/c_print_results.o \

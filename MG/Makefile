@@ -1,7 +1,7 @@
 SHELL=/bin/sh
 BENCHMARK=mg
 BENCHMARKU=MG
-
+BENCHMARKL=mg
 include ../config/make.def
 
 OBJS = mg.o ${COMMON}/c_print_results.o  \

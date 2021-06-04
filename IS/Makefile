@@ -1,7 +1,7 @@
 SHELL=/bin/sh
 BENCHMARK=is
 BENCHMARKU=IS
-
+BENCHMARKL=is
 include ../config/make.def
 
 include ../sys/make.common

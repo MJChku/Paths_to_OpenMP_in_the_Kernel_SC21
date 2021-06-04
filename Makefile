@@ -52,11 +52,12 @@ clean:
 	- rm -f *~ */core */*~ */*.o */npbparams.h */*.obj */*.exe
 	- rm -f sys/setparams sys/makesuite sys/setparams.h
 	- rm -f bin/sp.* bin/lu.* bin/mg.* bin/ft.* bin/bt.* bin/is.* bin/ep.* bin/cg.*
+	- rm -f bin/SP.* bin/LU.* bin/MG.* bin.FT.* bin/BT.* bin/IS.* bin/EP.* bin/CG.*
 
 veryclean: clean
 	- rm config/make.def config/suite.def Part*
 	- rm bin/sp.* bin/lu.* bin/mg.* bin/ft.* bin/bt.* bin/is.* bin/ep.* bin/cg.*
-
+	- rm -f bin/*.*
 header:
 	@ $(SHELL) sys/print_header
 

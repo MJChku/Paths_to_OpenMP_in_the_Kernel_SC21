@@ -1,7 +1,7 @@
 SHELL=/bin/sh
 BENCHMARK=ep
 BENCHMARKU=EP
-
+BENCHMARKL=ep
 include ../config/make.def
 
 OBJS = ep.o ${COMMON}/c_print_results.o ${COMMON}/c_${RAND}.o \

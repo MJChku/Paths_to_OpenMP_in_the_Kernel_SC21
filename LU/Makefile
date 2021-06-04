@@ -1,6 +1,7 @@
 SHELL=/bin/sh
 BENCHMARK=lu
 BENCHMARKU=LU
+BENCHMARKL=lu
 
 include ../config/make.def
 

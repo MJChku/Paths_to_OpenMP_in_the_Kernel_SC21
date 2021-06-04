@@ -1,6 +1,7 @@
 SHELL=/bin/sh
-BENCHMARK=bt
+BENCHMARK=BT
 BENCHMARKU=BT
+BENCHMARKL=bt
 
 include ../config/make.def
 

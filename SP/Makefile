@@ -1,7 +1,7 @@
 SHELL=/bin/sh
 BENCHMARK=sp
 BENCHMARKU=SP
-
+BENCHMARKL=sp
 include ../config/make.def
 
 
