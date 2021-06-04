@@ -66,9 +66,10 @@ make build_nautilus BENCH-NAME=NAS BENCHMARK=FT
 ```
 
 ### Run NPB from within Nautilus (on QEMU)
+#### note, to quit from qemu, use "Alt+2", then type "quit"
 
 ```shell
-make run_nautilus BENCH-NAME=NAS 
+make run_nautilus BENCH-NAME=NAS BENCHMARK=FT 
 ```
 
 To start running that benchmark (e.g. FT), use the following commands at the root-shell prompt:
