@@ -118,7 +118,7 @@ run_linux_nas:
 ifeq ($(BENCHMARK),SUITE)	
 	
 	# Run all
-	cd linux_npb-nas/bin;
+	cd linux_npb-nas/ ; bash runall.sh
 	@echo "Run All nas-benchmarks"	
 
 else
@@ -134,6 +134,7 @@ run_linux_epcc:
 ifeq ($(BENCHMARK),SUITE)
 
 	@echo "Run all EPCC benchmark"
+	cd linux_epcc; bash runall.sh
 else
 
 	@echo "If error happens, comply to the following"
