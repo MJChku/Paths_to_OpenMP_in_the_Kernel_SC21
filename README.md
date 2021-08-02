@@ -1,9 +1,12 @@
 # Paths_to_OpenMP_in_the_Kernel_SC21
-Repository contains mainly RTK approach in "Paths to OpenMP in the kernel" submitted to SuperComputing21; But also some code of PIK/CCK but instructions may not be updated on this repo;
+Repository contains mainly RTK/PIK/CCK approach in "Paths to OpenMP in the kernel" submitted to SuperComputing21; 
+For RTK, refer to this repo is fine. But for PIK/CCK refer to the following instructions in those repos.
 
-For PIK ---> 
+For PIK ---> https://github.com/a-r-n/pik
 
-For CCK --->
+For CCK ---> https://github.com/scampanoni/cck
+
+For RTK ---> https://github.com/MJChku/Paths_to_OpenMP_in_the_Kernel_SC21/
 
 # RTK(RunTime in Kernel)
 
