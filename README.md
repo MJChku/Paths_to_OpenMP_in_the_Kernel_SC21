@@ -1,4 +1,8 @@
 # Paths_to_OpenMP_in_the_Kernel_SC21
+
+Detailed Description For Replication of Nautilus RTK/PIK/CCK, Linux AutoMP: http://pdinda.org/Stuff/paths-openmp-kernel-supplemental-ad.pdf
+
+
 Repository contains mainly RTK/PIK/CCK approach in "Paths to OpenMP in the kernel" submitted to SuperComputing21; 
 For RTK, refer to this repo is fine. But for PIK/CCK refer to the following instructions in those repos.
 
