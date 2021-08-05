@@ -1,17 +1,4 @@
-# Paths_to_OpenMP_in_the_Kernel_SC21
-
-Detailed Description For Replication of Nautilus RTK/PIK/CCK, Linux AutoMP: http://pdinda.org/Stuff/paths-openmp-kernel-supplemental-ad.pdf
-
-
-Repository contains mainly RTK/PIK/CCK approach in "Paths to OpenMP in the kernel" submitted to SuperComputing21; 
-For RTK, refer to this repo is fine. But for PIK/CCK refer to the following instructions in those repos.
-
-For PIK ---> https://github.com/a-r-n/pik
-
-For CCK ---> https://github.com/scampanoni/cck
-
-For RTK ---> https://github.com/MJChku/Paths_to_OpenMP_in_the_Kernel_SC21/
-
+# Paths_to_OpenMP_in_the_Kernel
 # RTK(RunTime in Kernel)
 
 This is the top-level git repository for the Run time in Kernel(RTK)
@@ -24,8 +11,6 @@ Different branches include different things we built described as below, and in 
 | RTK | Runtime in Kernel, and benchmarks run with kernel |
 | EPCC | EPCC benchmarks source code for linux |
 | NPB3.0-omp-c | NAS-NPB source code for linux |
-| PIK | Process in kernel source |
-| CCK | Custom Compilation in kernel, source code on Nautilus side |
 
 ## Alternatively, even without going to each branch, we provide top-level make command that will compile different things.
 
